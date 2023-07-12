@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use super::MONGODB_URI;
 use crate::host::merkle::{MerkleError, MerkleErrorCode, MerkleNode, MerkleTree};
 use crate::host::poseidon::gen_hasher;
@@ -44,7 +45,8 @@ fn bytes_to_bson(x: &[u8; 32]) -> Bson {
 
 #[derive(Debug)]
 pub struct MongoMerkle {
-    client: Client,
+    //client: Client,
+    db: HashMap<String, MerkleRecord>,
     contract_address: [u8; 32],
     root_hash: [u8; 32],
     default_hash: Vec<[u8; 32]>,
@@ -85,32 +87,45 @@ impl MongoMerkle {
     ) -> Result<Option<MerkleRecord>, mongodb::error::Error> {
         let dbname = Self::get_db_name();
         let cname = self.get_collection_name();
-        let collection = get_collection::<MerkleRecord>(&self.client, dbname, cname).await?;
-        let mut filter = doc! {};
-        filter.insert("index", index);
-        filter.insert("hash", bytes_to_bson(hash));
-        collection.find_one(filter, None).await
+        let s = cname + &index.to_string() + &hex::encode(hash);
+        Ok(self.db.get(&s).cloned())
+        // let collection = get_collection::<MerkleRecord>(&self.client, dbname, cname).await?;
+        // let mut filter = doc! {};
+        // filter.insert("index", index);
+        // filter.insert("hash", bytes_to_bson(hash));
+        // collection.find_one(filter, None).await
     }
 
     /* We always insert new record as there might be uncommitted update to the merkle tree */
-    pub async fn update_record(&self, record: MerkleRecord) -> Result<(), mongodb::error::Error> {
+    pub async fn update_record(&mut self, record: MerkleRecord) -> Result<(), mongodb::error::Error> {
         let dbname = Self::get_db_name();
         let cname = self.get_collection_name();
-        let collection = get_collection::<MerkleRecord>(&self.client, dbname, cname).await?;
-        let mut filter = doc! {};
-        filter.insert("index", record.index);
-        filter.insert("hash", bytes_to_bson(&record.hash));
-        let exists = collection.find_one(filter, None).await?;
-        exists.map_or(
-            {
-                collection.insert_one(record, None).await?;
-                Ok(())
-            },
-            |_| {
-                //println!("find existing node, preventing duplicate");
-                Ok(())
-            },
-        )
+        let s = cname + &record.index.to_string() + &hex::encode(&record.hash);
+        self.db.insert(s.clone(), record.clone());
+        {
+            let v = self.db.get(&s).cloned().unwrap();
+            assert_eq!(record.index, v.index);
+            assert_eq!(record.data, v.data);
+            assert_eq!(record.hash, v.hash);
+            assert_eq!(record.left, v.left);
+            assert_eq!(record.right, v.right);
+        }
+        Ok(())
+        // let collection = get_collection::<MerkleRecord>(&self.client, dbname, cname).await?;
+        // let mut filter = doc! {};
+        // filter.insert("index", record.index);
+        // filter.insert("hash", bytes_to_bson(&record.hash));
+        // let exists = collection.find_one(filter, None).await?;
+        // exists.map_or(
+        //     {
+        //         collection.insert_one(record, None).await?;
+        //         Ok(())
+        //     },
+        //     |_| {
+        //         //println!("find existing node, preventing duplicate");
+        //         Ok(())
+        //     },
+        // )
     }
 }
 
@@ -230,9 +245,10 @@ impl MerkleTree<[u8; 32], 20> for MongoMerkle {
     type Node = MerkleRecord;
 
     fn construct(addr: Self::Id, root: Self::Root) -> Self {
-        let client = executor::block_on(Client::with_uri_str(MONGODB_URI)).expect("Unexpected DB Error");
+        //let client = executor::block_on(Client::with_uri_str(MONGODB_URI)).expect("Unexpected DB Error");
         MongoMerkle {
-            client,
+            //client,
+            db: HashMap::new(),
             contract_address: addr,
             root_hash: root,
             default_hash: (*DEFAULT_HASH_VEC).clone(),
@@ -383,12 +399,12 @@ mod tests {
 
         // 1
         let mut mt = MongoMerkle::construct(TEST_ADDR, DEFAULT_HASH_VEC[MongoMerkle::height()]);
-        executor::block_on(drop_collection::<MerkleRecord>(
-            &mt.client,
-            MongoMerkle::get_db_name(),
-            mt.get_collection_name(),
-        ))
-        .expect("Unexpected DB Error");
+        // executor::block_on(drop_collection::<MerkleRecord>(
+        //     &mt.client,
+        //     MongoMerkle::get_db_name(),
+        //     mt.get_collection_name(),
+        // ))
+        // .expect("Unexpected DB Error");
         let root = mt.get_root_hash();
         let root64 = root
             .chunks(8)
@@ -491,12 +507,12 @@ mod tests {
 
         // 1
         let mut mt = MongoMerkle::construct(TEST_ADDR, DEFAULT_HASH_VEC[MongoMerkle::height()]);
-        executor::block_on(drop_collection::<MerkleRecord>(
-            &mt.client,
-            MongoMerkle::get_db_name(),
-            mt.get_collection_name(),
-        ))
-        .expect("Unexpected DB Error");
+        // executor::block_on(drop_collection::<MerkleRecord>(
+        //     &mt.client,
+        //     MongoMerkle::get_db_name(),
+        //     mt.get_collection_name(),
+        // ))
+        // .expect("Unexpected DB Error");
         let root = mt.get_root_hash();
         let root64 = root
             .chunks(8)
@@ -607,12 +623,12 @@ mod tests {
 
         // 1
         let mut mt = MongoMerkle::construct(TEST_ADDR, DEFAULT_HASH_VEC[MongoMerkle::height()]);
-        executor::block_on(drop_collection::<MerkleRecord>(
-            &mt.client,
-            MongoMerkle::get_db_name(),
-            mt.get_collection_name(),
-        ))
-        .expect("Unexpected DB Error");
+        // executor::block_on(drop_collection::<MerkleRecord>(
+        //     &mt.client,
+        //     MongoMerkle::get_db_name(),
+        //     mt.get_collection_name(),
+        // ))
+        // .expect("Unexpected DB Error");
         let root = mt.get_root_hash();
         let root64 = root
             .chunks(8)

@@ -166,7 +166,10 @@ impl MerkleNode<[u8; 32]> for MerkleRecord {
             .collect::<Vec<Fr>>();
         let values: [Fr; 2] = batchdata.try_into().unwrap();
         hasher.update(&values);
-        self.hash = hasher.squeeze().to_repr();
+        let mut hasher = SHA256_HASHER.clone();
+        hasher.input(data);
+        hasher.result(&mut self.hash);
+        //self.hash = hasher.squeeze().to_repr();
     }
     fn right(&self) -> Option<[u8; 32]> {
         Some(self.right)
@@ -266,7 +269,7 @@ impl MerkleTree<[u8; 32], 20> for MongoMerkle {
 
     fn hash(a: &[u8; 32], b: &[u8; 32]) -> [u8; 32] {
 
-        let mut hasher = POSEIDON_HASHER.clone();
+        //let mut hasher = POSEIDON_HASHER.clone();
         let mut hasher = SHA256_HASHER.clone();
         hasher.input(a);
         hasher.input(b);

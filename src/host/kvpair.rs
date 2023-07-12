@@ -13,6 +13,7 @@ use serde::{
     de::{Error, Unexpected},
     Deserialize, Deserializer, Serialize, Serializer,
 };
+use std::sync::Mutex;
 
 fn deserialize_u256_as_binary<'de, D>(deserializer: D) -> Result<[u8; 32], D::Error>
 where
@@ -43,10 +44,11 @@ fn bytes_to_bson(x: &[u8; 32]) -> Bson {
     })
 }
 
+
 #[derive(Debug)]
 pub struct MongoMerkle {
     //client: Client,
-    db: HashMap<String, MerkleRecord>,
+    //db: HashMap<String, MerkleRecord>,
     contract_address: [u8; 32],
     root_hash: [u8; 32],
     default_hash: Vec<[u8; 32]>,
@@ -85,10 +87,11 @@ impl MongoMerkle {
         index: u32,
         hash: &[u8; 32],
     ) -> Result<Option<MerkleRecord>, mongodb::error::Error> {
-        let dbname = Self::get_db_name();
+        //let dbname = Self::get_db_name();
         let cname = self.get_collection_name();
         let s = cname + &index.to_string() + &hex::encode(hash);
-        Ok(self.db.get(&s).cloned())
+        let map = GLOBAL_MAP.lock().unwrap();
+        Ok(map.get(&s).cloned())
         // let collection = get_collection::<MerkleRecord>(&self.client, dbname, cname).await?;
         // let mut filter = doc! {};
         // filter.insert("index", index);
@@ -98,18 +101,11 @@ impl MongoMerkle {
 
     /* We always insert new record as there might be uncommitted update to the merkle tree */
     pub async fn update_record(&mut self, record: MerkleRecord) -> Result<(), mongodb::error::Error> {
-        let dbname = Self::get_db_name();
+        //let dbname = Self::get_db_name();
         let cname = self.get_collection_name();
         let s = cname + &record.index.to_string() + &hex::encode(&record.hash);
-        self.db.insert(s.clone(), record.clone());
-        {
-            let v = self.db.get(&s).cloned().unwrap();
-            assert_eq!(record.index, v.index);
-            assert_eq!(record.data, v.data);
-            assert_eq!(record.hash, v.hash);
-            assert_eq!(record.left, v.left);
-            assert_eq!(record.right, v.right);
-        }
+        let mut map = GLOBAL_MAP.lock().unwrap();
+        map.insert(s, record);
         Ok(())
         // let collection = get_collection::<MerkleRecord>(&self.client, dbname, cname).await?;
         // let mut filter = doc! {};
@@ -237,6 +233,8 @@ lazy_static::lazy_static! {
     };
 
     static ref POSEIDON_HASHER: poseidon::Poseidon<Fr, 9, 8> = gen_hasher();
+
+    static ref GLOBAL_MAP: Mutex<HashMap<String, MerkleRecord>> = Mutex::new(HashMap::new());
 }
 
 impl MerkleTree<[u8; 32], 20> for MongoMerkle {
@@ -248,7 +246,6 @@ impl MerkleTree<[u8; 32], 20> for MongoMerkle {
         //let client = executor::block_on(Client::with_uri_str(MONGODB_URI)).expect("Unexpected DB Error");
         MongoMerkle {
             //client,
-            db: HashMap::new(),
             contract_address: addr,
             root_hash: root,
             default_hash: (*DEFAULT_HASH_VEC).clone(),

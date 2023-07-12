@@ -14,6 +14,8 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
 };
 use std::sync::Mutex;
+use crypto::sha2::Sha256;
+use crypto::digest::Digest;
 
 fn deserialize_u256_as_binary<'de, D>(deserializer: D) -> Result<[u8; 32], D::Error>
 where
@@ -234,6 +236,8 @@ lazy_static::lazy_static! {
 
     static ref POSEIDON_HASHER: poseidon::Poseidon<Fr, 9, 8> = gen_hasher();
 
+    static ref SHA256_HASHER: Sha256 = Sha256::new();
+
     static ref GLOBAL_MAP: Mutex<HashMap<String, MerkleRecord>> = Mutex::new(HashMap::new());
 }
 
@@ -261,11 +265,18 @@ impl MerkleTree<[u8; 32], 20> for MongoMerkle {
     }
 
     fn hash(a: &[u8; 32], b: &[u8; 32]) -> [u8; 32] {
+
         let mut hasher = POSEIDON_HASHER.clone();
-        let a = Fr::from_repr(*a).unwrap();
-        let b = Fr::from_repr(*b).unwrap();
-        hasher.update(&[a, b]);
-        hasher.squeeze().to_repr()
+        let mut hasher = SHA256_HASHER.clone();
+        hasher.input(a);
+        hasher.input(b);
+        let mut result = [0u8; 32];
+        hasher.result(&mut result);
+        result
+        // let a = Fr::from_repr(*a).unwrap();
+        // let b = Fr::from_repr(*b).unwrap();
+        // hasher.update(&[a, b]);
+        // hasher.squeeze().to_repr()
     }
 
     fn set_parent(

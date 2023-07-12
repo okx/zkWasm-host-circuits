@@ -34,3 +34,4 @@ hex = "0.4"
 mongodb = { version = "2.5.0", default-features = false, features = ["async-std-runtime"] }
 ripemd = "0.1.3"
 futures = "0.3.28"
+rust-crypto = "0.2.36"

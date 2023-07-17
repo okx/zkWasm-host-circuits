@@ -214,7 +214,7 @@ lazy_static::lazy_static! {
         default_hash
     };
 
-    static ref POSEIDON_HASHER: poseidon::Poseidon<Fr, 9, 8> = gen_hasher();
+    pub static ref POSEIDON_HASHER: poseidon::Poseidon<Fr, 9, 8> = gen_hasher();
 
     static ref GLOBAL_MAP: Mutex<HashMap<String, MerkleRecord>> = Mutex::new(HashMap::new());
 }

@@ -218,7 +218,7 @@ lazy_static::lazy_static! {
         default_hash
     };
 
-    static ref POSEIDON_HASHER: poseidon::Poseidon<Fr, 9, 8> = gen_hasher();
+    pub static ref POSEIDON_HASHER: poseidon::Poseidon<Fr, 9, 8> = gen_hasher();
 
     static ref SHA256_HASHER: Sha256 = Sha256::new();
 

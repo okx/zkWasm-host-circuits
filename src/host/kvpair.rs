@@ -329,6 +329,25 @@ mod tests {
         kvpair::drop_collection,
         merkle::{MerkleNode, MerkleTree},
     };
+    use crate::host::kvpair::POSEIDON_HASHER;
+    use ff::PrimeField;
+    use halo2_proofs::pairing::bn256::Fr;
+
+    #[test]
+    fn hash_bench() {
+        let a = [0; 32];
+        let b = [1; 32];
+        MongoMerkle::hash(&a, &b);
+        let start = Instant::now();
+        for _i in 0..1000 {
+            let mut hasher = POSEIDON_HASHER.clone();
+            let a = Fr::from_repr(a).unwrap();
+            let b = Fr::from_repr(b).unwrap();
+            hasher.update(&[a, b]);
+            hasher.squeeze().to_repr();
+        }
+        println!("cost:{:?}", Instant::now().duration_since(start));
+    }
 
     use futures::executor;
     use halo2_proofs::pairing::bn256::Fr;

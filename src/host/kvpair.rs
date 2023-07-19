@@ -324,6 +324,7 @@ impl MerkleTree<[u8; 32], 20> for MongoMerkle {
 #[cfg(test)]
 mod tests {
     use std::time::Instant;
+    use crypto::digest::Digest;
     use super::{MerkleRecord, MongoMerkle, DEFAULT_HASH_VEC};
     use crate::host::{
         kvpair::drop_collection,
@@ -332,6 +333,7 @@ mod tests {
     use crate::host::kvpair::POSEIDON_HASHER;
     use ff::PrimeField;
     use halo2_proofs::pairing::bn256::Fr;
+    use crate::host::kvpair::SHA256_HASHER;
 
     #[test]
     fn hash_bench() {
@@ -349,10 +351,22 @@ mod tests {
         println!("cost:{:?}", Instant::now().duration_since(start));
     }
 
+    #[test]
+    fn sha256_bench() {
+        let _hasher = SHA256_HASHER.clone();
+        let a = [1u8; 32].to_vec();
+        let start = Instant::now();
+        for _i in 0..2 {
+            let mut hasher = SHA256_HASHER.clone();
+            hasher.input(&a);
+            let mut result = [0u8; 32];
+            hasher.result(&mut result)
+        }
+        println!("cost:{:?}", Instant::now().duration_since(start));
+    }
+
     use futures::executor;
-    use halo2_proofs::pairing::bn256::Fr;
     use crate::host::poseidon::gen_hasher;
-    use ff::PrimeField;
 
     #[test]
     fn poseidon() {

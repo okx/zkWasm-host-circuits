@@ -1,0 +1,6 @@
+# kvpair mongodb upgrade scripts
+## How to run upgrade
+```
+npm install
+npm run upgrade
+```

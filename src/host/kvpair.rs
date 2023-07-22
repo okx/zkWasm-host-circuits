@@ -144,8 +144,6 @@ impl MerkleNode<[u8; 32]> for MerkleRecord {
         let values: [Fr; 2] = batchdata.try_into().unwrap();
         hasher.update(&values);
         self.hash = hasher.squeeze().to_repr();
-        println!("update with values {:?}", values);
-        println!("update with new hash {:?}", self.hash);
     }
     fn right(&self) -> Option<[u8; 32]> {
         Some(self.right)

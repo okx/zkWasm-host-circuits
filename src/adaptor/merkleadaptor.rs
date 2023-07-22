@@ -245,9 +245,6 @@ impl<const DEPTH: usize> HostOpSelector for MerkleChip<Fr, DEPTH> {
                 for arg_group in arg_cells.chunks_exact(5) {
                     println!("round ====== {} {}", round, offset);
                     round += 1;
-                    //println!("address is {}", arg_group[0].value.get_lower_128());
-                    //println!("set root with is {:?} [op = {:?}]", arg_group[1].value, arg_group[4].value);
-                    //println!("value is {:?} {:?}", arg_group[2].value, arg_group[3].value);
                     let proof = if arg_group[4].value == Fr::from(KVPairSet as u64) {
                         //println!("op is set, process set:");
                         let (mut leaf, _) = mt

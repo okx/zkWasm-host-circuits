@@ -110,7 +110,6 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
                 Ok(())
             },
             |_| {
-                //println!("find existing node, preventing duplicate");
                 Ok(())
             },
         )
@@ -157,8 +156,6 @@ impl MerkleNode<[u8; 32]> for MerkleRecord {
         let values: [Fr; 2] = batchdata.try_into().unwrap();
         hasher.update(&values);
         self.hash = hasher.squeeze().to_repr();
-        println!("update with values {:?}", values);
-        println!("update with new hash {:?}", self.hash);
     }
     fn right(&self) -> Option<[u8; 32]> {
         Some(self.right)
@@ -274,14 +271,12 @@ impl<const DEPTH: usize> MerkleTree<[u8; 32], DEPTH> for MongoMerkle<DEPTH> {
             right: *right,
             hash: *hash,
         };
-        //println!("set_node_with_hash {} {:?}", index, hash);
         self.update_record(record).expect("Unexpected DB Error");
         Ok(())
     }
 
     fn get_node_with_hash(&self, index: u32, hash: &[u8; 32]) -> Result<Self::Node, MerkleError> {
         let v = self.get_record(index, hash).expect("Unexpected DB Error");
-        //println!("get_node_with_hash {} {:?} {:?}", index, hash, v);
         let height = (index + 1).ilog2();
         v.map_or(
             {

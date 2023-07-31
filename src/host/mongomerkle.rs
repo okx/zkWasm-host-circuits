@@ -456,23 +456,24 @@ mod tests {
     use super::db::get_collection;
     use super::{MerkleRecord, MongoMerkle, DEFAULT_HASH_VEC};
     use crate::host::merkle::{MerkleNode, MerkleTree};
-    use crate::utils::field_to_bytes;
+    use crate::utils::{field_to_bytes, bytes_to_u64};
     use halo2_proofs::pairing::bn256::Fr;
     use mongodb::bson::doc;
 
     #[test]
     /* Test for check parent node
      * 1. Clear m tree collection. Create default empty m tree. Check root.
-     * 2. Update index=2_u32.pow(20) - 1 (first leaf) leave value.
-     * 3. Update index=2_u32.pow(20) (second leaf) leave value.
-     * 4. Get index=2_u32.pow(19) - 1 node with hash and confirm the left and right are previous set leaves.
+     * 2. Update index=2_u32.pow(31) - 1 (first leaf) leave value.
+     * 3. Update index=2_u32.pow(31) (second leaf) leave value.
+     * 4. Get index=2_u32.pow(30) - 1 node with hash and confirm the left and right are previous set leaves.
      * 5. Load mt from DB and Get index=2_u32.pow(19) - 1 node with hash and confirm the left and right are previous set leaves.
      */
     fn test_mongo_merkle_parent_node() {
-        const DEPTH: usize = 20;
+        const DEPTH: usize = 31;
         const TEST_ADDR: [u8; 32] = [1; 32];
         let index = 2_u64.pow(DEPTH as u32) - 1;
         let data = Fr::from(0x1000 as u64);
+        println!("depth 31 default root is {:?}", bytes_to_u64(&DEFAULT_HASH_VEC[DEPTH]));
 
         let mut mt = MongoMerkle::<DEPTH>::construct(TEST_ADDR, DEFAULT_HASH_VEC[DEPTH].clone());
         let dbname: String = MongoMerkle::<DEPTH>::get_db_name();
@@ -489,14 +490,14 @@ mod tests {
     }
 
     #[test]
-    /* Basic tests for 20 height m tree
-     * 1. Update index=2_u32.pow(20) - 1 (first leaf) leave value. Check root.
-     * 2. Check index=2_u32.pow(20) - 1 leave value updated.
+    /* Basic tests for 31 height m tree
+     * 1. Update index=2_u32.pow(31) - 1 (first leaf) leave value. Check root.
+     * 2. Check index=2_u32.pow(31) - 1 leave value updated.
      * 3. Load m tree from DB, check root and leave value.
      */
     fn test_mongo_merkle_single_leaf_update() {
         // Init checking results
-        const DEPTH: usize = 20;
+        const DEPTH: usize = 31;
         const TEST_ADDR: [u8; 32] = [2; 32];
         const INDEX1: u64 = 2_u64.pow(DEPTH as u32) - 1;
         const LEAF1_DATA: [u8; 32] = [
@@ -572,16 +573,16 @@ mod tests {
         assert_eq!(mt.verify_proof(proof).unwrap(), true);
     }
 
-    /* Tests for 20 height m tree with updating multple leaves
+    /* Tests for 31 height m tree with updating multple leaves
      * 1. Clear m tree collection. Create default empty m tree. Check root (default one, A).
-     * 2. Update index=2_u32.pow(20) - 1 (first leaf) leave value. Check root (1 leave updated, B). Check index=2_u32.pow(20) - 1 leave value updated.
-     * 3. Update index=2_u32.pow(20) (second leaf) leave value. Check root (1 leave updated, C). Check index=2_u32.pow(20) leave value updated.
-     * 4. Update index=2_u32.pow(21) - 2 (last leaf) leave value. Check root (1 leave updated, D). Check index=2_u32.pow(21) -2 leave value updated.
+     * 2. Update index=2_u32.pow(31) - 1 (first leaf) leave value. Check root (1 leave updated, B). Check index=2_u32.pow(20) - 1 leave value updated.
+     * 3. Update index=2_u32.pow(31) (second leaf) leave value. Check root (1 leave updated, C). Check index=2_u32.pow(20) leave value updated.
+     * 4. Update index=2_u32.pow(22) - 2 (last leaf) leave value. Check root (1 leave updated, D). Check index=2_u32.pow(21) -2 leave value updated.
      * 5. Load m tree from DB with D root hash, check root and leaves' values.
      */
     fn _test_mongo_merkle_multi_leaves_update(addr: u8) {
         // Init checking results
-        const DEPTH: usize = 20;
+        const DEPTH: usize = 31;
         let test_addr: [u8; 32] = [addr; 32];
         const INDEX1: u64 = 2_u64.pow(DEPTH as u32) - 1;
         const LEAF1_DATA: [u8; 32] = [

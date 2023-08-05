@@ -1,6 +1,6 @@
-use crate::host::cache::{get_cache_key, MERKLE_CACHE};
+use crate::host::cache::{get_merkle_cache_key, MERKLE_CACHE};
 use crate::host::db;
-use crate::host::merkle::{MerkleError, MerkleErrorCode, MerkleNode, MerkleTree};
+use crate::host::merkle::{MerkleError, MerkleErrorCode, MerkleNode, MerkleProof, MerkleTree};
 use crate::host::poseidon::MERKLE_HASHER;
 use crate::host::poseidon::POSEIDON_HASHER;
 use ff::PrimeField;
@@ -61,13 +61,6 @@ where
     binary.serialize(serializer)
 }
 
-fn u64_to_bson(x: u64) -> Bson {
-    Bson::Binary(mongodb::bson::Binary {
-        subtype: BinarySubtype::Generic,
-        bytes: x.to_le_bytes().to_vec(),
-    })
-}
-
 #[derive(Debug)]
 pub struct MongoMerkle<const DEPTH: usize> {
     contract_address: [u8; 32],
@@ -103,18 +96,14 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
         index: u64,
         hash: &[u8; 32],
     ) -> Result<Option<MerkleRecord>, mongodb::error::Error> {
-        let dbname = Self::get_db_name();
         let cname = self.get_collection_name();
-        let cache_key = get_cache_key(cname.clone(), index, hash);
+        let cache_key = get_merkle_cache_key(cname.clone(), index, hash);
         let mut cache = MERKLE_CACHE.lock().unwrap();
         if let Some(record) = cache.get(&cache_key) {
             Ok(Some(record.clone()))
         } else {
-            let collection = db::get_collection::<MerkleRecord>(dbname, cname)?;
-            let mut filter = doc! {};
-            filter.insert("index", u64_to_bson(index));
-            filter.insert("hash", db::u256_to_bson(hash));
-            let record = collection.find_one(filter, None);
+            let store = db::STORE.lock().unwrap();
+            let record = store.get_merkle_record(index, hash);
             if let Ok(Some(value)) = record.clone() {
                 cache.push(cache_key, value);
             };
@@ -134,7 +123,7 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
         //Check Cache first
         let mut cache = MERKLE_CACHE.lock().unwrap();
         for record in records.iter() {
-            let cache_key = get_cache_key(cname.clone(), record.index, &record.hash);
+            let cache_key = get_merkle_cache_key(cname.clone(), record.index, &record.hash);
             if let Some(r) = cache.get(&cache_key) {
                 find.push(r.clone());
                 notfind.remove(notfind.iter().position(|x| x.clone() == r.clone()).unwrap());
@@ -147,7 +136,7 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
             let mut docs: Vec<mongodb::bson::Document> = vec![];
             for record in notfind.iter() {
                 let mut and_doc: Vec<mongodb::bson::Document> = vec![];
-                and_doc.push(doc! {"index": u64_to_bson(record.index)});
+                and_doc.push(doc! {"index": db::u64_to_bson(record.index)});
                 and_doc.push(doc! {"hash": db::u256_to_bson(&record.hash)});
                 docs.push(doc! {"$and": and_doc});
             }
@@ -167,7 +156,7 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
 
             //Update Cache
             for record in find_in_db_only.iter() {
-                let cache_key = get_cache_key(cname.clone(), record.index, &record.hash);
+                let cache_key = get_merkle_cache_key(cname.clone(), record.index, &record.hash);
                 cache.push(cache_key, record.clone());
             }
         }
@@ -176,9 +165,7 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
 
     /* We always insert new record as there might be uncommitted update to the merkle tree */
     pub fn update_record(&self, record: MerkleRecord) -> Result<(), mongodb::error::Error> {
-        let dbname = Self::get_db_name();
         let cname = self.get_collection_name();
-        let collection = db::get_collection::<MerkleRecord>(dbname, cname.clone())?;
         let exists: Result<Option<MerkleRecord>, mongodb::error::Error> =
             self.get_record(record.index, &record.hash);
         //println!("record is none: {:?}", exists.as_ref().unwrap().is_none());
@@ -188,10 +175,11 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
                 r.map_or_else(
                     || {
                         //println!("Do update record to DB for index {:?}, hash: {:?}", record.index, record.hash);
-                        let cache_key = get_cache_key(cname, record.index, &record.hash);
+                        let cache_key = get_merkle_cache_key(cname, record.index, &record.hash);
                         let mut cache = MERKLE_CACHE.lock().unwrap();
                         cache.push(cache_key, record.clone());
-                        collection.insert_one(record, None)?;
+                        let mut store = db::STORE.lock().unwrap();
+                        store.set_merkle_record(record);
                         Ok(())
                     },
                     |_| Ok(()),
@@ -204,9 +192,7 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
         &self,
         records: &Vec<MerkleRecord>,
     ) -> Result<(), mongodb::error::Error> {
-        let dbname = Self::get_db_name();
         let cname = self.get_collection_name();
-        let collection = db::get_collection::<MerkleRecord>(dbname, cname.clone())?;
         let (_, new_records) = self.batch_get_records(&records)?;
         /*
         println!(
@@ -217,14 +203,68 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
 
         if new_records.len() > 0 {
             let mut cache = MERKLE_CACHE.lock().unwrap();
+            let mut store = db::STORE.lock().unwrap();
             for record in new_records.iter() {
-                let cache_key = get_cache_key(cname.clone(), record.index, &record.hash);
+                let cache_key = get_merkle_cache_key(cname.clone(), record.index, &record.hash);
                 cache.push(cache_key, record.clone());
+                store.set_merkle_record(record.clone());
             }
 
-            collection.insert_many(new_records, None)?;
         }
         Ok(())
+    }
+
+    fn generate_default_node(&self, index: u64) -> Result<MerkleRecord, MerkleError> {
+        let height = (index + 1).ilog2();
+        let default = self.get_default_hash(height as usize)?;
+        let child_hash = if height == Self::height() as u32 {
+            [0; 32]
+        } else {
+            self.get_default_hash((height + 1) as usize)?
+        };
+
+        Ok(MerkleRecord {
+            index,
+            hash: default,
+            data: [0; 32],
+            left: child_hash,
+            right: child_hash,
+        })
+    }
+
+    fn check_generate_default_node(
+        &self,
+        index: u64,
+        hash: &[u8; 32],
+    ) -> Result<MerkleRecord, MerkleError> {
+        let node = self.generate_default_node(index)?;
+        if node.hash() == *hash {
+            Ok(node)
+        } else {
+            Err(MerkleError::new(*hash, index, MerkleErrorCode::InvalidHash))
+        }
+    }
+
+    fn get_or_generate_node(
+        &self,
+        index: u64,
+        hash: &[u8; 32],
+    ) -> Result<(MerkleRecord, bool), MerkleError> {
+        let mut exist = false;
+        let node = self
+            .get_record(index, hash)
+            .expect("Unexpected DB Error")
+            .map_or_else(
+                || -> Result<MerkleRecord, MerkleError> {
+                    Ok(self.check_generate_default_node(index, hash)?)
+                },
+                |x| -> Result<MerkleRecord, MerkleError> {
+                    exist = true;
+                    assert!(x.index == index);
+                    Ok(x)
+                },
+            )?;
+        Ok((node, exist))
     }
 }
 
@@ -448,6 +488,47 @@ impl<const DEPTH: usize> MerkleTree<[u8; 32], DEPTH> for MongoMerkle<DEPTH> {
         self.update_record(leaf.clone())
             .expect("Unexpected DB Error");
         Ok(())
+    }
+
+    fn get_leaf_with_proof(
+        &self,
+        index: u64,
+    ) -> Result<(Self::Node, MerkleProof<[u8; 32], DEPTH>), MerkleError> {
+        self.leaf_check(index)?;
+        let paths = self.get_path(index)?.to_vec();
+        // We push the search from the top
+        let hash = self.get_root_hash();
+        let mut acc = 0;
+        let (mut acc_node, mut parent_exist) = self.get_or_generate_node(acc, &hash)?;
+        let assist: Vec<[u8; 32]> = paths
+            .into_iter()
+            .map(|child| {
+                let (hash, sibling_hash) = if (acc + 1) * 2 == child + 1 {
+                    // left child
+                    (acc_node.left().unwrap(), acc_node.right().unwrap())
+                } else {
+                    assert_eq!((acc + 1) * 2, child);
+                    (acc_node.right().unwrap(), acc_node.left().unwrap())
+                };
+                acc = child;
+                if parent_exist {
+                    (acc_node, parent_exist) = self.get_or_generate_node(acc, &hash)?
+                } else {
+                    acc_node = self.check_generate_default_node(acc, &hash)?
+                }
+                Ok(sibling_hash)
+            })
+            .collect::<Result<Vec<[u8; 32]>, _>>()?;
+        let hash = acc_node.hash();
+        Ok((
+            acc_node,
+            MerkleProof {
+                source: hash,
+                root: self.get_root_hash(),
+                assist: assist.try_into().unwrap(),
+                index,
+            },
+        ))
     }
 }
 

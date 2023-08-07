@@ -19,7 +19,6 @@ lazy_static::lazy_static! {
 #[cfg(test)]
 mod tests {
     use halo2_proofs::pairing::bn256::Fr;
-    use crate::host::poseidon::POSEIDON_HASHER;
     use ff::PrimeField;
 
     #[test]
@@ -34,6 +33,7 @@ mod tests {
     }
 
     use std::time::Instant;
+    use zkwasm_host_circuits::host::poseidon::POSEIDON_HASHER;
 
     #[test]
     fn hash_bench() {

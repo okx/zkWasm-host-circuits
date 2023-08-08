@@ -61,6 +61,13 @@ where
     binary.serialize(serializer)
 }
 
+fn u64_to_bson(x: u64) -> Bson {
+    Bson::Binary(mongodb::bson::Binary {
+        subtype: BinarySubtype::Generic,
+        bytes: x.to_le_bytes().to_vec(),
+    })
+}
+
 #[derive(Debug)]
 pub struct MongoMerkle<const DEPTH: usize> {
     contract_address: [u8; 32],

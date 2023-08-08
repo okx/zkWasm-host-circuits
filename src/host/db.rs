@@ -36,9 +36,16 @@ pub fn bytes_to_bson(x: &[u8; 32]) -> Bson {
     })
 }
 
+pub fn u64_to_bson(x: u64) -> Bson {
+    Bson::Binary(mongodb::bson::Binary {
+        subtype: BinarySubtype::Generic,
+        bytes: x.to_le_bytes().to_vec(),
+    })
+}
+
 pub struct Store {
     // client: Client,
-    cache: HashMap<(u32, [u8; 32]), MerkleRecord>,
+    cache: HashMap<(u64, [u8; 32]), MerkleRecord>,
 }
 
 impl Store {
@@ -51,7 +58,7 @@ impl Store {
 
     pub fn get(
         &self,
-        index: u32,
+        index: u64,
         hash: &[u8; 32],
     ) -> Result<Option<MerkleRecord>, mongodb::error::Error> {
         if let Some(record) = self.cache.get(&(index, *hash)) {
@@ -63,7 +70,7 @@ impl Store {
                 DEFAULT_COLLECTION_NAME.to_string(),
             )?;
             let mut filter = doc! {};
-            filter.insert("index", index);
+            filter.insert("index", u64_to_bson(index));
             filter.insert("hash", bytes_to_bson(hash));
             collection.find_one(filter, None)
         }

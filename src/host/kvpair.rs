@@ -14,6 +14,31 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
 };
 
+fn deserialize_u64_as_binary<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match Bson::deserialize(deserializer) {
+        Ok(Bson::Binary(bytes)) => Ok({
+            let c: [u8; 8] = bytes.bytes.try_into().unwrap();
+            u64::from_le_bytes(c)
+        }),
+        Ok(..) => Err(Error::invalid_value(Unexpected::Enum, &"Bson::Binary")),
+        Err(e) => Err(e),
+    }
+}
+
+fn serialize_u64_as_binary<S>(value: &u64, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let binary = Bson::Binary(mongodb::bson::Binary {
+        subtype: BinarySubtype::Generic,
+        bytes: value.to_le_bytes().to_vec(),
+    });
+    binary.serialize(serializer)
+}
+
 fn deserialize_u256_as_binary<'de, D>(deserializer: D) -> Result<[u8; 32], D::Error>
 where
     D: Deserializer<'de>,
@@ -34,13 +59,6 @@ where
         bytes: bytes.into(),
     });
     binary.serialize(serializer)
-}
-
-fn bytes_to_bson(x: &[u8; 32]) -> Bson {
-    Bson::Binary(mongodb::bson::Binary {
-        subtype: BinarySubtype::Generic,
-        bytes: (*x).into(),
-    })
 }
 
 #[derive(Debug)]
@@ -75,7 +93,7 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
 
     pub fn get_record(
         &self,
-        index: u32,
+        index: u64,
         hash: &[u8; 32],
     ) -> Result<Option<MerkleRecord>, mongodb::error::Error> {
         let cname = self.get_collection_name();
@@ -118,8 +136,8 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
             let mut docs: Vec<mongodb::bson::Document> = vec![];
             for record in notfind.iter() {
                 let mut and_doc: Vec<mongodb::bson::Document> = vec![];
-                and_doc.push(doc! {"index": record.index});
-                and_doc.push(doc! {"hash": bytes_to_bson(&record.hash)});
+                and_doc.push(doc! {"index": db::u64_to_bson(record.index)});
+                and_doc.push(doc! {"hash": db::bytes_to_bson(&record.hash)});
                 docs.push(doc! {"$and": and_doc});
             }
             let filter = doc! {
@@ -196,7 +214,7 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
         Ok(())
     }
 
-    fn generate_default_node(&self, index: u32) -> Result<MerkleRecord, MerkleError> {
+    fn generate_default_node(&self, index: u64) -> Result<MerkleRecord, MerkleError> {
         let height = (index + 1).ilog2();
         let default = self.get_default_hash(height as usize)?;
         let child_hash = if height == Self::height() as u32 {
@@ -216,7 +234,7 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
 
     fn check_generate_default_node(
         &self,
-        index: u32,
+        index: u64,
         hash: &[u8; 32],
     ) -> Result<MerkleRecord, MerkleError> {
         let node = self.generate_default_node(index)?;
@@ -229,7 +247,7 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
 
     fn get_or_generate_node(
         &self,
-        index: u32,
+        index: u64,
         hash: &[u8; 32],
     ) -> Result<(MerkleRecord, bool), MerkleError> {
         let mut exist = false;
@@ -252,7 +270,9 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MerkleRecord {
-    index: u32,
+    #[serde(serialize_with = "self::serialize_u64_as_binary")]
+    #[serde(deserialize_with = "self::deserialize_u64_as_binary")]
+    index: u64,
     #[serde(serialize_with = "self::serialize_bytes_as_binary")]
     #[serde(deserialize_with = "self::deserialize_u256_as_binary")]
     hash: [u8; 32],
@@ -268,7 +288,7 @@ pub struct MerkleRecord {
 }
 
 impl MerkleNode<[u8; 32]> for MerkleRecord {
-    fn index(&self) -> u32 {
+    fn index(&self) -> u64 {
         self.index
     }
     fn hash(&self) -> [u8; 32] {
@@ -302,7 +322,7 @@ impl MerkleNode<[u8; 32]> for MerkleRecord {
 }
 
 impl MerkleRecord {
-    fn new(index: u32) -> Self {
+    fn new(index: u64) -> Self {
         MerkleRecord {
             index,
             hash: [0; 32],
@@ -326,7 +346,7 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
     pub fn height() -> usize {
         return DEPTH;
     }
-    fn empty_leaf(index: u32) -> MerkleRecord {
+    fn empty_leaf(index: u64) -> MerkleRecord {
         let mut leaf = MerkleRecord::new(index);
         leaf.set(&[0; 32].to_vec());
         leaf
@@ -338,7 +358,7 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
         } else {
             Err(MerkleError::new(
                 [0; 32],
-                depth as u32,
+                depth as u64,
                 MerkleErrorCode::InvalidDepth,
             ))
         }
@@ -392,7 +412,7 @@ impl<const DEPTH: usize> MerkleTree<[u8; 32], DEPTH> for MongoMerkle<DEPTH> {
 
     fn set_parent(
         &mut self,
-        index: u32,
+        index: u64,
         hash: &[u8; 32],
         left: &[u8; 32],
         right: &[u8; 32],
@@ -413,7 +433,7 @@ impl<const DEPTH: usize> MerkleTree<[u8; 32], DEPTH> for MongoMerkle<DEPTH> {
     fn set_leaf_and_parents(
         &mut self,
         leaf: &MerkleRecord,
-        parents: [(u32, [u8; 32], [u8; 32], [u8; 32]); DEPTH],
+        parents: [(u64, [u8; 32], [u8; 32], [u8; 32]); DEPTH],
     ) -> Result<(), MerkleError> {
         self.leaf_check(leaf.index)?;
         let mut records: Vec<MerkleRecord> = parents
@@ -433,7 +453,7 @@ impl<const DEPTH: usize> MerkleTree<[u8; 32], DEPTH> for MongoMerkle<DEPTH> {
         Ok(())
     }
 
-    fn get_node_with_hash(&self, index: u32, hash: &[u8; 32]) -> Result<Self::Node, MerkleError> {
+    fn get_node_with_hash(&self, index: u64, hash: &[u8; 32]) -> Result<Self::Node, MerkleError> {
         let (node, _) = self.get_or_generate_node(index, hash)?;
         Ok(node)
     }
@@ -447,7 +467,7 @@ impl<const DEPTH: usize> MerkleTree<[u8; 32], DEPTH> for MongoMerkle<DEPTH> {
 
     fn get_leaf_with_proof(
         &self,
-        index: u32,
+        index: u64,
     ) -> Result<(Self::Node, MerkleProof<[u8; 32], DEPTH>), MerkleError> {
         self.leaf_check(index)?;
         let paths = self.get_path(index)?.to_vec();

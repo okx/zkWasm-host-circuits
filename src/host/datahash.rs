@@ -1,4 +1,4 @@
-use crate::host::db;
+// use crate::host::db;
 use ff::PrimeField;
 use halo2_proofs::pairing::bn256::Fr;
 //use lazy_static;
@@ -89,12 +89,13 @@ impl MongoDataHash {
         if let Some(record) = cache.get(hash) {
             Ok(Some(record.clone()))
         } else {
-            let store = db::STORE.lock().unwrap();
-            let record = store.get_data_record(hash);
-            if let Ok(Some(value)) = record.clone() {
-                cache.push(*hash, value);
-            };
-            record
+            // let store = db::STORE.lock().unwrap();
+            // let record = store.get_data_record(hash);
+            // if let Ok(Some(value)) = record.clone() {
+            //     cache.push(*hash, value);
+            // };
+            // record
+            Ok(None)
         }
     }
 
@@ -105,8 +106,8 @@ impl MongoDataHash {
             || {
                 let mut cache = DATA_CACHE.lock().unwrap();
                 cache.push(record.hash, record.clone());
-                let mut store = db::STORE.lock().unwrap();
-                store.set_data_record(record.clone());
+                // let mut store = db::STORE.lock().unwrap();
+                // store.set_data_record(record.clone());
                 Ok(())
             },
             |bytes| {

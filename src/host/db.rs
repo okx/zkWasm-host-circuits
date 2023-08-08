@@ -109,32 +109,32 @@ impl Store {
 
     pub fn commit(&mut self) -> Result<(), mongodb::error::Error> {
         // insert cached records to db
-        if self.merkle_cache.len() > 0 {
-            let mut records = Vec::new();
-            for (_, record) in self.merkle_cache.iter() {
-                records.push(record);
-            }
-            let collection = get_collection::<MerkleRecord>(
-                DB_NAME.to_string(),
-                MERKLE_COLLECTION_NAME.to_string(),
-            )?;
-            collection.insert_many(records, None)?;
-
-            self.merkle_cache.clear();
-        }
-
-        if self.data_cache.len() > 0 {
-            let mut records = Vec::new();
-            for (_, record) in self.data_cache.iter() {
-                records.push(record);
-            }
-            let collection = get_collection::<DataHashRecord>(
-                DB_NAME.to_string(),
-                DATA_COLLECTION_NAME.to_string(),
-            )?;
-            collection.insert_many(records, None)?;
-            self.data_cache.clear();
-        }
+        // if self.merkle_cache.len() > 0 {
+        //     let mut records = Vec::new();
+        //     for (_, record) in self.merkle_cache.iter() {
+        //         records.push(record);
+        //     }
+        //     let collection = get_collection::<MerkleRecord>(
+        //         DB_NAME.to_string(),
+        //         MERKLE_COLLECTION_NAME.to_string(),
+        //     )?;
+        //     collection.insert_many(records, None)?;
+        //
+        //     self.merkle_cache.clear();
+        // }
+        //
+        // if self.data_cache.len() > 0 {
+        //     let mut records = Vec::new();
+        //     for (_, record) in self.data_cache.iter() {
+        //         records.push(record);
+        //     }
+        //     let collection = get_collection::<DataHashRecord>(
+        //         DB_NAME.to_string(),
+        //         DATA_COLLECTION_NAME.to_string(),
+        //     )?;
+        //     collection.insert_many(records, None)?;
+        //     self.data_cache.clear();
+        // }
 
         Ok(())
     }

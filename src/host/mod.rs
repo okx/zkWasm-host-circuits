@@ -27,14 +27,14 @@ pub enum ForeignInst {
     Log = 0,
     BlsPairG1,
     BlsPairG2,
-    BlsPairG3,
-    BlsSumNew,
-    BlsSumScalar,
     BlsSumG1,
     BlsSumResult,
     Bn254PairG1,
     Bn254PairG2,
-    Bn254PairG3,
+    Bn254SumNew,
+    Bn254SumScalar,
+    Bn254SumG1,
+    Bn254SumResult,
     MerkleSetRoot,   // 11
     MerkleGetRoot,   // 12
     MerkleAddress,   // 13
@@ -51,11 +51,11 @@ pub enum ForeignInst {
     JubjubSumNew,
     JubjubSumPush,
     JubjubSumResult,
-    FixFlag,
-    Bn254SumNew,
-    Bn254SumScalar,
-    Bn254SumG1,
-    Bn254SumResult,
+    LogOutput,
+    BlsPairG3,
+    BlsSumNew,
+    BlsSumScalar,
+    Bn254PairG3,
 }
 
 pub enum ReduceRule<F: FieldExt> {

@@ -87,11 +87,11 @@ impl MongoDataHash {
     ) -> Result<Option<DataHashRecord>, mongodb::error::Error> {
         let mut cache = DATA_CACHE.lock().unwrap();
         if let Some(record) = cache.get(hash) {
-            Ok(Some(record.clone()))
+            Ok(record.clone())
         } else {
             let store = db::STORE.lock().unwrap();
             let record = store.get_data_record(hash);
-            if let Ok(Some(value)) = record.clone() {
+            if let Ok(value) = record.clone() {
                 cache.push(*hash, value);
             };
             record
@@ -105,7 +105,7 @@ impl MongoDataHash {
             || {
                 //println!("Do update record to DB for hash: {:?}", record.hash);
                 let mut cache = DATA_CACHE.lock().unwrap();
-                cache.push(record.hash, record.clone());
+                cache.push(record.hash, Some(record.clone()));
                 let mut store = db::STORE.lock().unwrap();
                 store.set_data_record(record.clone());
                 Ok(())

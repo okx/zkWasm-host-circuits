@@ -100,11 +100,11 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
         let cache_key = get_merkle_cache_key(cname.clone(), index, hash);
         let mut cache = MERKLE_CACHE.lock().unwrap();
         if let Some(record) = cache.get(&cache_key) {
-            Ok(Some(record.clone()))
+            Ok(record.clone())
         } else {
             let store = db::STORE.lock().unwrap();
             let record = store.get_merkle_record(index, hash);
-            if let Ok(Some(value)) = record.clone() {
+            if let Ok(value) = record.clone() {
                 cache.push(cache_key, value);
             };
             record
@@ -124,7 +124,7 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
         let mut cache = MERKLE_CACHE.lock().unwrap();
         for record in records.iter() {
             let cache_key = get_merkle_cache_key(cname.clone(), record.index, &record.hash);
-            if let Some(r) = cache.get(&cache_key) {
+            if let Some(Some(r)) = cache.get(&cache_key) {
                 find.push(r.clone());
                 notfind.remove(notfind.iter().position(|x| x.clone() == r.clone()).unwrap());
             }
@@ -157,7 +157,7 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
             //Update Cache
             for record in find_in_db_only.iter() {
                 let cache_key = get_merkle_cache_key(cname.clone(), record.index, &record.hash);
-                cache.push(cache_key, record.clone());
+                cache.push(cache_key, Some(record.clone()));
             }
         }
         Ok((find, notfind))
@@ -177,7 +177,7 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
                         //println!("Do update record to DB for index {:?}, hash: {:?}", record.index, record.hash);
                         let cache_key = get_merkle_cache_key(cname, record.index, &record.hash);
                         let mut cache = MERKLE_CACHE.lock().unwrap();
-                        cache.push(cache_key, record.clone());
+                        cache.push(cache_key, Some(record.clone()));
                         let mut store = db::STORE.lock().unwrap();
                         store.set_merkle_record(record);
                         Ok(())
@@ -208,7 +208,7 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
             let mut store = db::STORE.lock().unwrap();
             for record in records.iter() {
                 let cache_key = get_merkle_cache_key(cname.clone(), record.index, &record.hash);
-                cache.push(cache_key, record.clone());
+                cache.push(cache_key, Some(record.clone()));
                 store.set_merkle_record(record.clone());
             }
             // collection.insert_many(new_records, None)?;

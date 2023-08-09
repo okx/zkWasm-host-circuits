@@ -205,7 +205,7 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
 
         if records.len() > 0 {
             let mut cache = MERKLE_CACHE.lock().unwrap();
-            // let mut store = db::STORE.lock().unwrap();
+            let mut store = db::STORE.lock().unwrap();
             for record in records.iter() {
                 let cache_key = get_merkle_cache_key(cname.clone(), record.index, &record.hash);
                 cache.push(cache_key, record.clone());

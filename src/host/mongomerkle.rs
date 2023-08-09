@@ -209,7 +209,7 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
             for record in records.iter() {
                 let cache_key = get_merkle_cache_key(cname.clone(), record.index, &record.hash);
                 cache.push(cache_key, record.clone());
-                // store.set_merkle_record(record.clone());
+                store.set_merkle_record(record.clone());
             }
             // collection.insert_many(new_records, None)?;
         }

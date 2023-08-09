@@ -102,12 +102,13 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
         if let Some(record) = cache.get(&cache_key) {
             Ok(Some(record.clone()))
         } else {
-            let store = db::STORE.lock().unwrap();
-            let record = store.get_merkle_record(index, hash);
-            if let Ok(Some(value)) = record.clone() {
-                cache.push(cache_key, value);
-            };
-            record
+            // let store = db::STORE.lock().unwrap();
+            // let record = store.get_merkle_record(index, hash);
+            // if let Ok(Some(value)) = record.clone() {
+            //     cache.push(cache_key, value);
+            // };
+            // record
+            Ok(None)
         }
     }
 
@@ -178,8 +179,8 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
                         let cache_key = get_merkle_cache_key(cname, record.index, &record.hash);
                         let mut cache = MERKLE_CACHE.lock().unwrap();
                         cache.push(cache_key, record.clone());
-                        let mut store = db::STORE.lock().unwrap();
-                        store.set_merkle_record(record);
+                        // let mut store = db::STORE.lock().unwrap();
+                        // store.set_merkle_record(record);
                         Ok(())
                     },
                     |_| Ok(()),
@@ -205,11 +206,11 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
 
         if records.len() > 0 {
             let mut cache = MERKLE_CACHE.lock().unwrap();
-            let mut store = db::STORE.lock().unwrap();
+            // let mut store = db::STORE.lock().unwrap();
             for record in records.iter() {
                 let cache_key = get_merkle_cache_key(cname.clone(), record.index, &record.hash);
                 cache.push(cache_key, record.clone());
-                store.set_merkle_record(record.clone());
+                // store.set_merkle_record(record.clone());
             }
             // collection.insert_many(new_records, None)?;
         }

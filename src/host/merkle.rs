@@ -227,14 +227,41 @@ pub trait MerkleTree<H: Debug + Clone + PartialEq, const D: usize> {
         Ok(proof)
     }
 
+    fn set_leaf_with_proof2(&mut self, leaf: &Self::Node, mut proof: MerkleProof<H, D>) -> Result<MerkleProof<H, D>, MerkleError> {
+        let index = leaf.index();
+        let mut hash = leaf.hash();
+        proof.source = hash.clone();
+        let mut p = get_offset(index);
+        //self.set_leaf(leaf)?;
+        let mut parents = vec![];
+        for i in 0..D {
+            let cur_hash = hash;
+            let depth = D - i - 1;
+            let (left, right) = if p % 2 == 1 {
+                (&proof.assist[depth], &cur_hash)
+            } else {
+                (&cur_hash, &proof.assist[depth])
+            };
+            hash = Self::hash(left, right);
+            p = p / 2;
+            let index = p + (1 << depth) - 1;
+            //self.set_parent(index, &hash, left, right)?;
+            parents.push((index, hash.clone(), left.clone(), right.clone()));
+        }
+        self.set_leaf_and_parents(leaf, parents.try_into().unwrap())?;
+        self.update_root_hash(&hash);
+        proof.root = hash;
+        Ok(proof)
+    }
+
     fn update_leaf_data_with_proof(
         &mut self,
         index: u32,
         data: &Vec<u8>,
     ) -> Result<MerkleProof<H, D>, MerkleError> {
-        let (mut leaf, _) = self.get_leaf_with_proof(index)?;
+        let (mut leaf, proof) = self.get_leaf_with_proof(index)?;
         leaf.set(data);
-        self.set_leaf_with_proof(&leaf)
+        self.set_leaf_with_proof2(&leaf, proof)
     }
 
     fn verify_proof(&mut self, proof: MerkleProof<H, D>) -> Result<bool, MerkleError> {

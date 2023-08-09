@@ -2917,6 +2917,7 @@ name = "zkwasm-host-circuits"
 version = "0.1.0"
 dependencies = [
  "ark-std",
+ "bytes",
  "clap",
  "ff",
  "halo2_proofs",

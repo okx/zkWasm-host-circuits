@@ -1,4 +1,4 @@
-use crate::host::cache::{get_cache_key, MERKLE_CACHE};
+use crate::host::cache::{MERKLE_CACHE};
 use crate::host::db;
 use crate::host::merkle::{MerkleError, MerkleErrorCode, MerkleNode, MerkleProof, MerkleTree};
 use crate::host::poseidon::MERKLE_HASHER;
@@ -58,13 +58,27 @@ impl PartialEq for MerkleRecord {
     }
 }
 
+use bytes::{BytesMut, BufMut};
+
 impl<const DEPTH: usize> MongoMerkle<DEPTH> {
-    fn get_collection_name(&self) -> String {
-        format!("MERKLEDATA_{}", hex::encode(&self.contract_address))
-    }
+    // fn get_collection_name(&self) -> String {
+    //     format!("MERKLEDATA_{}", hex::encode(&self.contract_address))
+    // }
     // fn get_db_name() -> String {
     //     return "zkwasmkvpair".to_string();
     // }
+
+    fn get_cache_key(&self, index: u32, hash: &[u8]) -> Vec<u8> {
+        let meta = "MERKLEDATA_";
+        let mut buf = BytesMut::with_capacity(meta.len()+68);
+        buf.put_slice(meta.as_bytes());
+        buf.put_slice(&self.contract_address);
+        buf.put_u32(index);
+        buf.put(hash);
+        buf.freeze().to_vec()
+
+        //cname + &index.to_string() + &hex::encode(hash)
+    }
 
     pub fn get_record(
         &self,
@@ -72,8 +86,8 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
         hash: &[u8; 32],
     ) -> Result<Option<MerkleRecord>, mongodb::error::Error> {
         //let dbname = Self::get_db_name();
-        let cname = self.get_collection_name();
-        let cache_key = get_cache_key(cname, index, hash);
+        //let cname = self.get_collection_name();
+        let cache_key = self.get_cache_key(index, hash);
         let mut cache = MERKLE_CACHE.lock().unwrap();
         if let Some(record) = cache.get(&cache_key) {
             Ok(Some(record.clone()))
@@ -85,10 +99,10 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
     /* We always insert new record as there might be uncommitted update to the merkle tree */
     pub fn update_record(&self, record: MerkleRecord) -> Result<(), mongodb::error::Error> {
         //let dbname = Self::get_db_name();
-        let cname = self.get_collection_name();
-        let cache_key = get_cache_key(cname, record.index, &record.hash);
+        //let cname = self.get_collection_name();
+        let cache_key = self.get_cache_key(record.index, &record.hash);
         let mut cache = MERKLE_CACHE.lock().unwrap();
-        cache.push(cache_key, record.clone());
+        cache.push(cache_key, record);
         Ok(())
     }
 
@@ -96,7 +110,7 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
         &self,
         records: Vec<MerkleRecord>,
     ) -> Result<(), mongodb::error::Error> {
-        for record in records {
+        for record in records.into_iter() {
             self.update_record(record)?;
         }
         Ok(())
@@ -183,17 +197,11 @@ impl MerkleNode<[u8; 32]> for MerkleRecord {
     fn set(&mut self, data: &Vec<u8>) {
         let mut hasher = POSEIDON_HASHER.clone();
         self.data = data.clone().try_into().unwrap();
-        let batchdata = data
-            .chunks(16)
-            .into_iter()
-            .map(|x| {
-                let mut v = x.clone().to_vec();
-                v.extend_from_slice(&[0u8; 16]);
-                let f = v.try_into().unwrap();
-                Fr::from_repr(f).unwrap()
-            })
-            .collect::<Vec<Fr>>();
-        let values: [Fr; 2] = batchdata.try_into().unwrap();
+        let mut v1 = [0u8; 32];
+        v1[..16].clone_from_slice(&data[0..16]);
+        let mut v2 = [0u8; 32];
+        v2[..16].clone_from_slice(&data[16..32]);
+        let values: [Fr; 2] = [Fr::from_repr(v1).unwrap(), Fr::from_repr(v2).unwrap()];
         hasher.update(&values);
         self.hash = hasher.squeeze().to_repr();
         //println!("update with values {:?}", values);

@@ -144,16 +144,16 @@ pub trait MerkleTree<H: Debug + Clone + PartialEq, const D: usize> {
     /// get_path(15) = [6, 2]
     fn get_path(&self, index: u32) -> Result<[u32; D], MerkleError> {
         self.leaf_check(index)?;
-        let mut height = (index + 1).ilog2();
-        let round = height;
+        let mut height = D;
+        let round = D ;
         let full = (1u32 << height) - 1;
         let mut p = index - full;
-        let mut path = vec![];
-        for _ in 0..round {
+        let mut path = [0u32; D];
+        for r in (0..round).rev() {
             let full = (1u32 << height) - 1;
             // Calculate the index of current node
             let i = full + p;
-            path.insert(0, i);
+            path[r] = i;
             height = height - 1;
             // Caculate the offset of parent
             p = p / 2;

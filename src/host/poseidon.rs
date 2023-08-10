@@ -33,7 +33,7 @@ mod tests {
     }
 
     use std::time::Instant;
-    use zkwasm_host_circuits::host::poseidon::POSEIDON_HASHER;
+    use crate::host::poseidon::POSEIDON_HASHER;
 
     #[test]
     fn hash_bench() {

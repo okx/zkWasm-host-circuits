@@ -9,8 +9,8 @@ use std::sync::Mutex;
 const DEFAULT_CACHE_SIZE: usize = usize::pow(2, 24);
 
 lazy_static::lazy_static! {
-    pub static ref MERKLE_CACHE: Mutex<LruCache<String, Option<MerkleRecord>>> =
-        Mutex::new(LruCache::<String, Option<MerkleRecord>>::new(
+    pub static ref MERKLE_CACHE: Mutex<LruCache<Vec<u8>, Option<MerkleRecord>>> =
+        Mutex::new(LruCache::<Vec<u8>, Option<MerkleRecord>>::new(
             NonZeroUsize::new(DEFAULT_CACHE_SIZE).unwrap(),
         ));
 

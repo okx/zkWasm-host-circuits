@@ -1,5 +1,5 @@
-use bytes::BufMut;
-use crate::host::cache::{get_merkle_cache_key, MERKLE_CACHE};
+use bytes::{BufMut, BytesMut};
+use crate::host::cache::{MERKLE_CACHE};
 use crate::host::db;
 use crate::host::merkle::{MerkleError, MerkleErrorCode, MerkleNode, MerkleProof, MerkleTree};
 use crate::host::poseidon::MERKLE_HASHER;
@@ -84,22 +84,23 @@ impl PartialEq for MerkleRecord {
     }
 }
 
+//const MERKLE_META: &str = "MERKLEDATA_";
+
 impl<const DEPTH: usize> MongoMerkle<DEPTH> {
-    fn get_collection_name(&self) -> String {
-        format!("MERKLEDATA_{}", hex::encode(&self.contract_address))
-    }
+    // fn get_collection_name(&self) -> String {
+    //     format!("MERKLEDATA_{}", hex::encode(&self.contract_address))
+    // }
     // fn get_db_name() -> String {
     //     return "zkwasm-mongo-merkle".to_string();
     // }
 
-    pub fn get_merkle_cache_key(&self, index: u64, hash: &[u8; 32]) -> Vec<u8> {
-        let meta = "MERKLEDATA_";
-        let mut buf = bytes::BytesMut::with_capacity(meta.len() + 72);
-        buf.put(self.contract_address.as_slice());
-        buf.put(meta.as_bytes());
+    pub fn get_merkle_cache_key(&self, index: u64, hash: &[u8]) -> Vec<u8> {
+        let mut buf = BytesMut::with_capacity(83);
+        buf.put_slice(b"MERKLEDATA_");
+        buf.put_slice(&self.contract_address);
         buf.put_u64(index);
-        buf.put_slice(hash.as_slice());
-        buf.freeze().to_vec()
+        buf.put_slice(hash);
+        buf.to_vec()
     }
 
     pub fn get_record(
@@ -107,8 +108,7 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
         index: u64,
         hash: &[u8; 32],
     ) -> Result<Option<MerkleRecord>, mongodb::error::Error> {
-        let cname = self.get_collection_name();
-        let cache_key = get_merkle_cache_key(cname, index, hash);
+        let cache_key = self.get_merkle_cache_key(index, hash);
         let mut cache = MERKLE_CACHE.lock().unwrap();
         if let Some(record) = cache.get(&cache_key) {
             Ok(record.clone())
@@ -119,8 +119,7 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
 
     /* We always insert new record as there might be uncommitted update to the merkle tree */
     pub fn update_record(&self, record: MerkleRecord) -> Result<(), mongodb::error::Error> {
-        let cname = self.get_collection_name();
-        let cache_key = get_merkle_cache_key(cname, record.index, &record.hash);
+        let cache_key = self.get_merkle_cache_key(record.index, &record.hash);
         let mut cache = MERKLE_CACHE.lock().unwrap();
         cache.push(cache_key, Some(record));
         Ok(())

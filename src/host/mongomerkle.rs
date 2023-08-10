@@ -1,4 +1,4 @@
-use crate::host::cache::{get_merkle_cache_key, MERKLE_CACHE};
+use crate::host::cache::MERKLE_CACHE;
 use crate::host::db;
 use crate::host::merkle::{MerkleError, MerkleErrorCode, MerkleNode, MerkleProof, MerkleTree};
 use crate::host::poseidon::MERKLE_HASHER;
@@ -96,16 +96,14 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
         index: u64,
         hash: &[u8; 32],
     ) -> Result<Option<MerkleRecord>, mongodb::error::Error> {
-        let cname = self.get_collection_name();
-        let cache_key = get_merkle_cache_key(cname.clone(), index, hash);
         let mut cache = MERKLE_CACHE.lock().unwrap();
-        if let Some(record) = cache.get(&cache_key) {
+        if let Some(record) = cache.get(&(index, *hash)) {
             Ok(record.clone())
         } else {
             let store = db::STORE.lock().unwrap();
             let record = store.get_merkle_record(index, hash);
             if let Ok(value) = record.clone() {
-                cache.push(cache_key, value);
+                cache.push((index, *hash), value);
             };
             record
         }
@@ -123,8 +121,7 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
         //Check Cache first
         let mut cache = MERKLE_CACHE.lock().unwrap();
         for record in records.iter() {
-            let cache_key = get_merkle_cache_key(cname.clone(), record.index, &record.hash);
-            if let Some(Some(r)) = cache.get(&cache_key) {
+            if let Some(Some(r)) = cache.get(&(record.index, record.hash)) {
                 find.push(r.clone());
                 notfind.remove(notfind.iter().position(|x| x.clone() == r.clone()).unwrap());
             }
@@ -156,8 +153,7 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
 
             //Update Cache
             for record in find_in_db_only.iter() {
-                let cache_key = get_merkle_cache_key(cname.clone(), record.index, &record.hash);
-                cache.push(cache_key, Some(record.clone()));
+                cache.push((record.index, record.hash), Some(record.clone()));
             }
         }
         Ok((find, notfind))
@@ -165,7 +161,6 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
 
     /* We always insert new record as there might be uncommitted update to the merkle tree */
     pub fn update_record(&self, record: MerkleRecord) -> Result<(), mongodb::error::Error> {
-        let cname = self.get_collection_name();
         let exists: Result<Option<MerkleRecord>, mongodb::error::Error> =
             self.get_record(record.index, &record.hash);
         //println!("record is none: {:?}", exists.as_ref().unwrap().is_none());
@@ -175,9 +170,8 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
                 r.map_or_else(
                     || {
                         //println!("Do update record to DB for index {:?}, hash: {:?}", record.index, record.hash);
-                        let cache_key = get_merkle_cache_key(cname, record.index, &record.hash);
                         let mut cache = MERKLE_CACHE.lock().unwrap();
-                        cache.push(cache_key, Some(record.clone()));
+                        cache.push((record.index, record.hash), Some(record.clone()));
                         let mut store = db::STORE.lock().unwrap();
                         store.set_merkle_record(record);
                         Ok(())
@@ -193,7 +187,7 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
         records: &Vec<MerkleRecord>,
     ) -> Result<(), mongodb::error::Error> {
         // let dbname = Self::get_db_name();
-        let cname = self.get_collection_name();
+        // let cname = self.get_collection_name();
         // let collection = db::get_collection::<MerkleRecord>(dbname, cname.clone())?;
         // let (_, new_records) = self.batch_get_records(&records)?;
         /*
@@ -207,8 +201,7 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
             let mut cache = MERKLE_CACHE.lock().unwrap();
             let mut store = db::STORE.lock().unwrap();
             for record in records.iter() {
-                let cache_key = get_merkle_cache_key(cname.clone(), record.index, &record.hash);
-                cache.push(cache_key, Some(record.clone()));
+                cache.push((record.index, record.hash), Some(record.clone()));
                 store.set_merkle_record(record.clone());
             }
             // collection.insert_many(new_records, None)?;

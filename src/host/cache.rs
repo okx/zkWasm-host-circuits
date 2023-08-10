@@ -9,8 +9,8 @@ use std::sync::Mutex;
 const DEFAULT_CACHE_SIZE: usize = usize::pow(2, 24);
 
 lazy_static::lazy_static! {
-    pub static ref MERKLE_CACHE: Mutex<LruCache<String, Option<MerkleRecord>>> =
-        Mutex::new(LruCache::<String, Option<MerkleRecord>>::new(
+    pub static ref MERKLE_CACHE: Mutex<LruCache<(u64, [u8;  32]), Option<MerkleRecord>>> =
+        Mutex::new(LruCache::<(u64, [u8;  32]), Option<MerkleRecord>>::new(
             NonZeroUsize::new(DEFAULT_CACHE_SIZE).unwrap(),
         ));
 
@@ -18,8 +18,4 @@ lazy_static::lazy_static! {
     Mutex::new(LruCache::<[u8; 32], Option<DataHashRecord>>::new(
         NonZeroUsize::new(DEFAULT_CACHE_SIZE).unwrap(),
     ));
-}
-
-pub fn get_merkle_cache_key(cname: String, index: u64, hash: &[u8; 32]) -> String {
-    cname + &index.to_string() + &hex::encode(hash)
 }

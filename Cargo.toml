@@ -36,6 +36,6 @@ ripemd = "0.1.3"
 lru = "0.11.0"
 
 [features]
-default = ["mongo-tokio-sync"]
+default = ["mongo-tokio-sync", "halo2_proofs/asm"]
 mongo-std-sync = ["mongodb/sync"]
 mongo-tokio-sync = ["mongodb/tokio-sync"]

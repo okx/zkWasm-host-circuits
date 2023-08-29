@@ -233,6 +233,7 @@ impl<S: HostOpSelector> HostOpChip<Fr, S> {
                     )?;
                     offset += 1;
                 }
+                println!("assign_region:{}, end cycle", shared_opcodes.len());
                 arg_cells = Some(S::assign(
                     &mut region,
                     shared_operands,
@@ -243,6 +244,7 @@ impl<S: HostOpSelector> HostOpChip<Fr, S> {
                 Ok(())
             },
         )?;
+        println!("assign_region:{}, end assign", shared_opcodes.len());
         Ok(arg_cells.unwrap())
     }
 }

@@ -1,0 +1,1 @@
+cargo run --release -- --input ../zkWasm/external_host_table.json --opname jubjubsum --output output

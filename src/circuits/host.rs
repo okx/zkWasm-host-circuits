@@ -209,9 +209,10 @@ impl<S: HostOpSelector> HostOpChip<Fr, S> {
         layouter.assign_region(
             || "filter operands and opcodes",
             |mut region| {
-                println!("assign_region");
+                println!("assign_region:{}", shared_opcodes.len());
                 let mut offset = 0;
                 for opcode in shared_opcodes {
+                    println!("offset:{}", offset);
                     self.config.assign_cell(
                         &mut region,
                         offset,

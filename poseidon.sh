@@ -1,1 +1,1 @@
-cargo run --release -- --input ../zkWasm/external_host_table.json --opname poseidonhash --output output
+cargo run --release --features cuda -- --input ../zkWasm/external_host_table.json --opname poseidonhash --output output

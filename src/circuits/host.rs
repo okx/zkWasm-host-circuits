@@ -231,7 +231,6 @@ impl<S: HostOpSelector> HostOpChip<Fr, S> {
                 )?;
                 offset += 1;
                 for opcode in shared_opcodes {
-                    println!("offset:{}", offset);
                     self.config.assign_cell(
                         &mut region,
                         offset,

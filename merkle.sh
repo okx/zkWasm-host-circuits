@@ -1,1 +1,1 @@
-cargo run --release --features cuda -- --input ../zkWasm/external_host_table.json --opname merkle --output output
+cargo run --release -- --input ../zkWasm/external_host_table.json --opname merkle --output output

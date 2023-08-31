@@ -54,7 +54,7 @@ struct ArgOpName {
     t: OpType,
 }
 #[derive(clap::ArgEnum, Clone, Debug)]
-enum OpType {
+pub enum OpType {
     BLS381PAIR,
     BLS381SUM,
     BN256PAIR,
@@ -187,6 +187,15 @@ fn main() {
         Ok(o) => o,
     };
 
+    gen_host_proof(cache_folder, v, opname);
+
+}
+
+pub fn gen_host_proof(
+    cache_folder: PathBuf,
+    v: host::ExternalHostCallEntryTable,
+    opname: OpType,
+) {
     // ANCHOR: test-circuit
     // The number of rows in our circuit cannot exceed 2^k. Since our example
     // circuit is very small, we can pick a very small value here.

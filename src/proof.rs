@@ -5,7 +5,7 @@ use halo2_proofs::{
 };
 use crate::circuits::babyjub::AltJubChip;
 
-use std::{marker::PhantomData, path::PathBuf};
+use std::{fs::File, io::BufReader, marker::PhantomData, path::PathBuf};
 
 use crate::circuits::{
     bls::Bls381PairChip,
@@ -111,14 +111,20 @@ impl<S: HostOpSelector> Circuit<Fr> for HostOpCircuit<Fr, S> {
 }
 
 pub fn gen_host_proof(
+    name: &str,
+    k: usize,
     cache_folder: PathBuf,
-    v: ExternalHostCallEntryTable,
+    input_file: PathBuf,
     opname: OpType,
 ) {
-    // ANCHOR: test-circuit
-    // The number of rows in our circuit cannot exceed 2^k. Since our example
-    // circuit is very small, we can pick a very small value here.
-    let k = 22;
+    let file = File::open(input_file).expect("File does not exist");
+    let v: ExternalHostCallEntryTable = match serde_json::from_reader(BufReader::new(file)) {
+        Err(e) => {
+            println!("load json error {:?}", e);
+            unreachable!();
+        }
+        Ok(o) => o,
+    };
 
     // Prepare the private and public inputs to the circuit!
     let shared_operands = v.0.iter().map(|x| Fr::from(x.value as u64)).collect();
@@ -140,7 +146,7 @@ pub fn gen_host_proof(
                 _marker: PhantomData,
             };
             let prover: CircuitInfo<Bn256, HostOpCircuit<Fr, Bls381PairChip<Fr>>> =
-                CircuitInfo::new(bls381pair_circuit, format!("{:?}", opname), vec![], k, Poseidon);
+                CircuitInfo::new(bls381pair_circuit, format!("{}.{:?}",name, opname), vec![], k, Poseidon);
             //prover.mock_proof(k as u32);
             prover.proofloadinfo.save(&cache_folder.as_path());
             prover.create_proof(cache_folder.as_path(), 0);
@@ -153,7 +159,7 @@ pub fn gen_host_proof(
                 _marker: PhantomData,
             };
             let prover: CircuitInfo<Bn256, HostOpCircuit<Fr, Bls381SumChip<Fr>>> =
-                CircuitInfo::new(bls381sum_circuit, format!("{:?}", opname), vec![], k, Poseidon);
+                CircuitInfo::new(bls381sum_circuit, format!("{}.{:?}",name, opname), vec![], k, Poseidon);
             //prover.mock_proof(k as u32);
             prover.proofloadinfo.save(&cache_folder.as_path());
             prover.create_proof(cache_folder.as_path(), 0);
@@ -166,7 +172,7 @@ pub fn gen_host_proof(
                 _marker: PhantomData,
             };
             let prover: CircuitInfo<Bn256, HostOpCircuit<Fr, Bn256PairChip<Fr>>> =
-                CircuitInfo::new(bn256pair_circuit, format!("{:?}", opname), vec![], k, Poseidon);
+                CircuitInfo::new(bn256pair_circuit, format!("{}.{:?}",name, opname), vec![], k, Poseidon);
             //prover.mock_proof(k as u32);
             prover.proofloadinfo.save(&cache_folder.as_path());
             prover.create_proof(cache_folder.as_path(), 0);
@@ -179,7 +185,7 @@ pub fn gen_host_proof(
                 _marker: PhantomData,
             };
             let prover: CircuitInfo<Bn256, HostOpCircuit<Fr, Bn256SumChip<Fr>>> =
-                CircuitInfo::new(bn256sum_circuit, format!("{:?}", opname), vec![], k, Poseidon);
+                CircuitInfo::new(bn256sum_circuit, format!("{}.{:?}",name, opname), vec![], k, Poseidon);
             //prover.mock_proof(k as u32);
             prover.proofloadinfo.save(&cache_folder.as_path());
             prover.create_proof(cache_folder.as_path(), 0);
@@ -192,7 +198,7 @@ pub fn gen_host_proof(
                 _marker: PhantomData,
             };
             let prover: CircuitInfo<Bn256, HostOpCircuit<Fr, PoseidonChip<Fr, 9, 8>>> =
-                CircuitInfo::new(poseidon_circuit, format!("{:?}", opname), vec![], k, Poseidon);
+                CircuitInfo::new(poseidon_circuit, format!("{}.{:?}",name, opname), vec![], k, Poseidon);
             //prover.mock_proof(k as u32);
             prover.proofloadinfo.save(&cache_folder.as_path());
             prover.create_proof(cache_folder.as_path(), 0);
@@ -205,7 +211,7 @@ pub fn gen_host_proof(
                 _marker: PhantomData,
             };
             let prover: CircuitInfo<Bn256, HostOpCircuit<Fr, MerkleChip<Fr, MERKLE_DEPTH>>> =
-                CircuitInfo::new(merkle_circuit, format!("{:?}", opname), vec![], k, Poseidon);
+                CircuitInfo::new(merkle_circuit, format!("{}.{:?}",name, opname), vec![], k, Poseidon);
             //prover.mock_proof(k as u32);
             prover.proofloadinfo.save(&cache_folder.as_path());
             prover.create_proof(cache_folder.as_path(), 0);
@@ -218,7 +224,7 @@ pub fn gen_host_proof(
                 _marker: PhantomData,
             };
             let prover: CircuitInfo<Bn256, HostOpCircuit<Fr, AltJubChip<Fr>>> =
-                CircuitInfo::new(jubjub_circuit, format!("{:?}", opname), vec![], k, Poseidon);
+                CircuitInfo::new(jubjub_circuit, format!("{}.{:?}",name, opname), vec![], k, Poseidon);
             //prover.mock_proof(k as u32);
             prover.proofloadinfo.save(&cache_folder.as_path());
             prover.create_proof(cache_folder.as_path(), 0);

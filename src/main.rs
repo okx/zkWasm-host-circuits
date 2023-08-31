@@ -8,7 +8,7 @@ pub mod utils;
 pub mod proof;
 
 use clap::{arg, value_parser, App, Arg, ArgMatches};
-use std::{fs::File, io::BufReader, path::PathBuf};
+use std::path::PathBuf;
 use crate::proof::{gen_host_proof, OpType};
 
 
@@ -69,15 +69,11 @@ fn main() {
     let cache_folder = parse_output_folder(&matches);
     let opname = parse_opname(&matches);
 
-    let file = File::open(input_file).expect("File does not exist");
-    let v: host::ExternalHostCallEntryTable = match serde_json::from_reader(BufReader::new(file)) {
-        Err(e) => {
-            println!("load json error {:?}", e);
-            unreachable!();
-        }
-        Ok(o) => o,
-    };
+    // ANCHOR: test-circuit
+    // The number of rows in our circuit cannot exceed 2^k. Since our example
+    // circuit is very small, we can pick a very small value here.
+    let k = 22;
 
-    gen_host_proof(cache_folder, v, opname);
+    gen_host_proof("host", k, cache_folder, input_file, opname);
 
 }

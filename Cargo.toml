@@ -40,3 +40,6 @@ default = ["mongo-tokio-sync"]
 mongo-std-sync = ["mongodb/sync"]
 mongo-tokio-sync = ["mongodb/tokio-sync"]
 cuda = ["halo2_proofs/cuda"]
+
+[patch."https://github.com/DelphinusLab/continuation-batcher.git"]
+circuits-batcher = { path = "../continuation-batcher"}

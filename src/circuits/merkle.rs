@@ -163,16 +163,19 @@ impl<const D: usize> MerkleChip<Fr, D> {
             .into_iter()
             .flatten()
             .collect::<Vec<_>>();
-        let compare_assist = self
+        let compare_assist: [_; D] = self
             .state
             .assist
-            .clone()
-            .zip(new_assist.clone().try_into().unwrap())
+            .iter()
+            .zip(new_assist.iter())
             .map(|(old, new)| {
                 self.config
                     .select(region, &mut (), offset, &is_set, &new, &old, 0)
                     .unwrap()
-            });
+            })
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
         for (a, b) in compare_assist.to_vec().into_iter().zip(new_assist) {
             region.constrain_equal(a.get_the_cell().cell(), b.get_the_cell().cell())?;
         }

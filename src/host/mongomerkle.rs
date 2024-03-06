@@ -409,8 +409,13 @@ impl<const DEPTH: usize> MerkleTree<[u8; 32], DEPTH> for MongoMerkle<DEPTH> {
             .to_vec();
 
         records.push(leaf.clone());
-        self.update_leaf_path_records(&records)
-            .expect("Unexpected DB Error when update records.");
+
+        // self.update_leaf_path_records(&records)
+        //     .expect("Unexpected DB Error when update records.");
+        for record in records {
+            self.update_record(record.clone())
+                .expect("Unexpected DB Error");
+        }
 
         Ok(())
     }

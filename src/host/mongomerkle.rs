@@ -1,4 +1,3 @@
-use crate::host::cache::MERKLE_CACHE;
 use crate::host::db;
 use crate::host::db::{MongoDB, TreeDB};
 use crate::host::merkle::{MerkleError, MerkleErrorCode, MerkleNode, MerkleProof, MerkleTree};
@@ -98,16 +97,8 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
         index: u64,
         hash: &[u8; 32],
     ) -> Result<Option<MerkleRecord>, mongodb::error::Error> {
-        let mut cache = MERKLE_CACHE.lock().unwrap();
-        if let Some(record) = cache.get(&(index, *hash)) {
-            Ok(record.clone())
-        } else {
-            let record = self.db.borrow().get_merkle_record(index, hash);
-            if let Ok(value) = record.clone() {
-                cache.push((index, *hash), value);
-            };
-            record
-        }
+        let record = self.db.borrow().get_merkle_record(index, hash);
+        record
     }
 
     /* We always insert new record as there might be uncommitted update to the merkle tree */
@@ -121,8 +112,6 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
                 r.map_or_else(
                     || {
                         //println!("Do update record to DB for index {:?}, hash: {:?}", record.index, record.hash);
-                        let mut cache = MERKLE_CACHE.lock().unwrap();
-                        cache.push((record.index, record.hash), Some(record.clone()));
                         self.db.borrow_mut().set_merkle_record(record)?;
                         Ok(())
                     },
@@ -133,39 +122,11 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
     }
 
     //the input records must be in one leaf path
-    pub fn update_leaf_path_records(
+    pub fn update_records(
         &mut self,
         records: &Vec<MerkleRecord>,
     ) -> Result<(), mongodb::error::Error> {
-        // sort records by index to ensure the parent node is processed before its child nodes.
-        let mut sort_records: Vec<MerkleRecord> = records.clone();
-        sort_records.sort_by(|r1, r2| r1.index.cmp(&r2.index));
-
-        let mut new_records: Vec<MerkleRecord> = vec![];
-        let mut check = true;
-        for record in sort_records {
-            // figure out whether a parent node had been added or not,
-            // to save the cache/db reading for its child nodes for optimizing.
-            if check {
-                match self.get_record(record.index, &record.hash) {
-                    Ok(Some(_)) => {}
-                    _ => {
-                        check = false;
-                        new_records.push(record);
-                    }
-                }
-            } else {
-                new_records.push(record);
-            }
-        }
-
-        if new_records.len() > 0 {
-            let mut cache = MERKLE_CACHE.lock().unwrap();
-            for record in new_records.iter() {
-                cache.push((record.index, record.hash), Some(record.clone()));
-            }
-            self.db.borrow_mut().set_merkle_records(&new_records)?;
-        }
+        self.db.borrow_mut().set_merkle_records(records)?;
         Ok(())
     }
 
@@ -409,7 +370,7 @@ impl<const DEPTH: usize> MerkleTree<[u8; 32], DEPTH> for MongoMerkle<DEPTH> {
             .to_vec();
 
         records.push(leaf.clone());
-        self.update_leaf_path_records(&records)
+        self.update_records(&records)
             .expect("Unexpected DB Error when update records.");
 
         Ok(())

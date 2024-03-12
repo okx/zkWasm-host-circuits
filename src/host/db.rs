@@ -5,12 +5,16 @@ use mongodb::{
 
 use crate::host::datahash::DataHashRecord;
 use crate::host::mongomerkle::MerkleRecord;
-use mongodb::bson::{spec::BinarySubtype, Bson};
+use mongodb::bson::{spec::BinarySubtype, to_bson, Bson};
+use mongodb::error::{Error, ErrorKind};
+use mongodb::options::{InsertManyOptions, UpdateOptions};
+use mongodb::results::InsertManyResult;
 
 const MONGODB_URI: &str = "mongodb://localhost:27017";
 pub const MONGODB_DATABASE: &str = "zkwasm-mongo-merkle";
 pub const MONGODB_MERKLE_NAME_PREFIX: &str = "MERKLEDATA";
 pub const MONGODB_DATA_NAME_PREFIX: &str = "DATAHASH";
+const DUPLICATE_KEY_ERROR_CODE: i32 = 11000;
 
 lazy_static::lazy_static! {
     pub static ref CLIENT: Client= {
@@ -78,8 +82,14 @@ impl TreeDB for MongoDB {
     }
 
     fn set_merkle_record(&mut self, record: MerkleRecord) -> Result<(), mongodb::error::Error> {
+        let options = UpdateOptions::builder().upsert(true).build();
+        let mut filter = doc! {};
+        filter.insert("index", u64_to_bson(record.index));
+        filter.insert("hash", u256_to_bson(&record.hash));
+        let record_doc = to_bson(&record).unwrap().as_document().unwrap().to_owned();
+        let update = doc! {"$set": record_doc};
         let collection = self.merkel_collection()?;
-        collection.insert_one(record, None)?;
+        collection.update_one(filter, update, options)?;
         Ok(())
     }
 
@@ -87,8 +97,12 @@ impl TreeDB for MongoDB {
         &mut self,
         records: &Vec<MerkleRecord>,
     ) -> Result<(), mongodb::error::Error> {
+        let options = InsertManyOptions::builder().ordered(false).build();
         let collection = self.merkel_collection()?;
-        collection.insert_many(records, None)?;
+        let ret = collection.insert_many(records, options);
+        if let Some(e) = filter_duplicate_key_error(ret) {
+            return Err(e);
+        }
         Ok(())
     }
 
@@ -103,9 +117,35 @@ impl TreeDB for MongoDB {
     }
 
     fn set_data_record(&mut self, record: DataHashRecord) -> Result<(), mongodb::error::Error> {
+        let options = UpdateOptions::builder().upsert(true).build();
+        let mut filter = doc! {};
+        filter.insert("hash", u256_to_bson(&record.hash));
+        let record_doc = to_bson(&record).unwrap().as_document().unwrap().to_owned();
+        let update = doc! {"$set": record_doc};
         let collection = self.data_collection()?;
-        collection.insert_one(record, None)?;
+        collection.update_one(filter, update, options)?;
         Ok(())
+    }
+}
+
+pub fn filter_duplicate_key_error(
+    result: mongodb::error::Result<InsertManyResult>,
+) -> Option<Error> {
+    match result {
+        Ok(_) => None,
+        Err(err) => {
+            if let ErrorKind::BulkWrite(we) = err.kind.as_ref() {
+                if let Some(write_errors) = &we.write_errors {
+                    if write_errors
+                        .iter()
+                        .all(|we| we.code == DUPLICATE_KEY_ERROR_CODE)
+                    {
+                        return None;
+                    }
+                }
+            }
+            Some(err)
+        }
     }
 }
 

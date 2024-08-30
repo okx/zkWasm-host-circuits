@@ -164,9 +164,8 @@ impl<const DEPTH: usize> HostOpSelector for MerkleChip<Fr, DEPTH> {
             r.push(setget);
         }
 
-        let mt: MongoMerkle<DEPTH> = MongoMerkle::<DEPTH>::default();
-        let default_proof = mt.default_proof();
-        assert!(mt.verify_proof(&default_proof).unwrap() == true);
+        let default_proof = MongoMerkle::<DEPTH>::default_proof();
+        assert!(MongoMerkle::verify_proof(&default_proof).unwrap() == true);
 
         let default_table = kvpair_to_host_call_table(&vec![(
             0,
@@ -288,7 +287,7 @@ impl<const DEPTH: usize> HostOpSelector for MerkleChip<Fr, DEPTH> {
             } else {
                 MongoMerkle::<DEPTH>::default()
             };
-            let default_proof = mt.default_proof();
+            let default_proof = MongoMerkle::<DEPTH>::default_proof();
 
             for args in arg_cells.chunks_exact(6) {
                 let [address, root, value0, value1, new_root, opcode] = args else { unreachable!() };

@@ -72,7 +72,6 @@ where
 #[derive(Clone)]
 pub struct MongoMerkle<const DEPTH: usize> {
     root_hash: [u8; 32],
-    default_hash: Vec<[u8; 32]>,
     db: Rc<RefCell<dyn TreeDB>>,
 }
 
@@ -115,13 +114,13 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
         Ok(())
     }
 
-    pub fn generate_default_node(&self, index: u64) -> Result<MerkleRecord, MerkleError> {
+    pub fn generate_default_node(index: u64) -> Result<MerkleRecord, MerkleError> {
         let height = (index + 1).ilog2();
-        let default = self.get_default_hash(height as usize)?;
+        let default = Self::get_default_hash(height as usize)?;
         let child_hash = if height == Self::height() as u32 {
             None
         } else {
-            let hash = self.get_default_hash((height + 1) as usize)?;
+            let hash = Self::get_default_hash((height + 1) as usize)?;
             Some(hash)
         };
 
@@ -139,7 +138,7 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
         index: u64,
         hash: &[u8; 32],
     ) -> Result<MerkleRecord, MerkleError> {
-        let node = self.generate_default_node(index)?;
+        let node = Self::generate_default_node(index)?;
         if node.hash() == *hash {
             Ok(node)
         } else {
@@ -153,9 +152,9 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
         hash: &[u8; 32],
     ) -> Result<MerkleRecord, MerkleError> {
         let height = (index + 1).ilog2();
-        let default_hash = self.get_default_hash(height as usize)?;
+        let default_hash = Self::get_default_hash(height as usize)?;
         if &default_hash == hash {
-            self.generate_default_node(index)
+            Self::generate_default_node(index)
         } else {
             match self.get_record(hash) {
                 Ok(Some(mut node)) => {
@@ -273,19 +272,21 @@ impl MerkleRecord {
     }
 }
 
+fn empty_leaf(index: u64) -> MerkleRecord {
+    let mut leaf = MerkleRecord::new(index);
+    leaf.set(&[0; 32].to_vec());
+    leaf
+}
+
 impl<const DEPTH: usize> MongoMerkle<DEPTH> {
     pub fn height() -> usize {
         return DEPTH;
     }
-    fn empty_leaf(index: u64) -> MerkleRecord {
-        let mut leaf = MerkleRecord::new(index);
-        leaf.set(&[0; 32].to_vec());
-        leaf
-    }
+
     /// depth start from 0 up to Self::height(). Example 20 height MongoMerkle, root depth=0, leaf depth=20
-    pub fn get_default_hash(&self, depth: usize) -> Result<[u8; 32], MerkleError> {
+    pub fn get_default_hash(depth: usize) -> Result<[u8; 32], MerkleError> {
         if depth <= Self::height() {
-            Ok(self.default_hash[Self::height() - depth])
+            Ok(DEFAULT_HASH_VEC[Self::height() - depth])
         } else {
             Err(MerkleError::new(
                 [0; 32],
@@ -295,15 +296,15 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
         }
     }
 
-    pub fn default_proof(&self) -> MerkleProof<[u8; 32], DEPTH> {
+    pub fn default_proof() -> MerkleProof<[u8; 32], DEPTH> {
         let mut assist = [0; DEPTH];
         for i in 0..DEPTH {
             assist[i] = i;
         }
         MerkleProof {
-            source: self.get_default_hash(DEPTH).unwrap(),
-            root: self.get_default_hash(0).unwrap(),
-            assist: assist.map(|x| self.get_default_hash(x + 1).unwrap()),
+            source: Self::get_default_hash(DEPTH).unwrap(),
+            root: Self::get_default_hash(0).unwrap(),
+            assist: assist.map(|x| Self::get_default_hash(x + 1).unwrap()),
             index: (1_u64 << DEPTH) - 1,
         }
     }
@@ -316,7 +317,7 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
 // It has 21 layers including the leaf layer and root layer.
 lazy_static::lazy_static! {
     pub static ref DEFAULT_HASH_VEC: Vec<[u8; 32]> = {
-        let mut leaf_hash = MongoMerkle::<64>::empty_leaf(0).hash;
+        let mut leaf_hash = empty_leaf(0).hash;
         let mut default_hash = vec![leaf_hash];
         for _ in 0..(MongoMerkle::<64>::height()) {
             leaf_hash = MongoMerkle::<64>::hash(&leaf_hash, &leaf_hash);
@@ -324,6 +325,13 @@ lazy_static::lazy_static! {
         }
         default_hash
     };
+}
+
+fn hash2(a: &[u8; 32], b: &[u8; 32]) -> [u8; 32] {
+    let mut hasher = MERKLE_HASHER.clone();
+    let a = Fr::from_repr(*a).unwrap();
+    let b = Fr::from_repr(*b).unwrap();
+    hasher.update_exact(&[a, b]).to_repr()
 }
 
 impl<const DEPTH: usize> MerkleTree<[u8; 32], DEPTH> for MongoMerkle<DEPTH> {
@@ -334,7 +342,6 @@ impl<const DEPTH: usize> MerkleTree<[u8; 32], DEPTH> for MongoMerkle<DEPTH> {
     fn construct(addr: Self::Id, root: Self::Root, db: Option<Rc<RefCell<dyn TreeDB>>>) -> Self {
         MongoMerkle {
             root_hash: root,
-            default_hash: DEFAULT_HASH_VEC.clone(),
             db: db.unwrap_or_else(|| Rc::new(RefCell::new(MongoDB::new(addr, None)))),
         }
     }
@@ -348,10 +355,7 @@ impl<const DEPTH: usize> MerkleTree<[u8; 32], DEPTH> for MongoMerkle<DEPTH> {
     }
 
     fn hash(a: &[u8; 32], b: &[u8; 32]) -> [u8; 32] {
-        let mut hasher = MERKLE_HASHER.clone();
-        let a = Fr::from_repr(*a).unwrap();
-        let b = Fr::from_repr(*b).unwrap();
-        hasher.update_exact(&[a, b]).to_repr()
+        hash2(a, b)
     }
 
     fn set_parent(
@@ -384,7 +388,7 @@ impl<const DEPTH: usize> MerkleTree<[u8; 32], DEPTH> for MongoMerkle<DEPTH> {
             .iter()
             .filter_map(|(index, hash, left, right)| {
                 let height = (index + 1).ilog2();
-                match self.get_default_hash(height as usize) {
+                match Self::get_default_hash(height as usize) {
                     // There is no need to set default nodes in db.
                     Ok(default_hash) if hash != &default_hash => Some(MerkleRecord {
                         index: *index,
@@ -459,7 +463,6 @@ impl<const DEPTH: usize> MongoMerkle<DEPTH> {
         let addr = [0u8; 32];
         MongoMerkle {
             root_hash: DEFAULT_HASH_VEC[DEPTH],
-            default_hash: (*DEFAULT_HASH_VEC).clone(),
             db: Rc::new(RefCell::new(MongoDB::new(addr, None))),
         }
     }

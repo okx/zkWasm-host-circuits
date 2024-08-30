@@ -242,7 +242,7 @@ pub trait MerkleTree<H: Debug + Clone + PartialEq, const D: usize> {
         self.set_leaf_with_proof(&leaf)
     }
 
-    fn verify_proof(&self, proof: &MerkleProof<H, D>) -> Result<bool, MerkleError> {
+    fn verify_proof(proof: &MerkleProof<H, D>) -> Result<bool, MerkleError> {
         let init = proof.source.clone();
         let mut p = get_offset(proof.index);
         let mut assist = proof.assist.clone();
